@@ -1,0 +1,123 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: socmed-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: socmed_app
+    ports:
+      - "3310:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-prootpassword"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  gateway:
+    build: ./gateway
+    container_name: socmed-gateway
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+      AUTH_SERVICE_URL: http://auth-service:4001
+      POST_SERVICE_URL: http://post-service:4002
+      COMMENT_SERVICE_URL: http://comment-service:4003
+      LIKE_SERVICE_URL: http://like-service:4004
+      MEDIA_SERVICE_URL: http://media-service:4005
+      JWT_ACCESS_SECRET: "access-secret"
+    ports:
+      - "4000:4000"
+    depends_on:
+      - auth-service
+      - post-service
+      - comment-service
+      - like-service
+      - media-service
+
+  auth-service:
+    build: ./services/auth-service
+    container_name: socmed-auth
+    restart: unless-stopped
+    environment:
+      PORT: 4001
+      DB_HOST: mysql
+      DB_USER: root
+      DB_PASSWORD: rootpassword
+      DB_NAME: socmed_app
+      JWT_ACCESS_SECRET: "access-secret"
+      JWT_REFRESH_SECRET: "refresh-secret"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  post-service:
+    build: ./services/post-service
+    container_name: socmed-post
+    restart: unless-stopped
+    environment:
+      PORT: 4002
+      DB_HOST: mysql
+      DB_USER: root
+      DB_PASSWORD: rootpassword
+      DB_NAME: socmed_app
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  comment-service:
+    build: ./services/comment-service
+    container_name: socmed-comment
+    restart: unless-stopped
+    environment:
+      PORT: 4003
+      DB_HOST: mysql
+      DB_USER: root
+      DB_PASSWORD: rootpassword
+      DB_NAME: socmed_app
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  like-service:
+    build: ./services/like-service
+    container_name: socmed-like
+    restart: unless-stopped
+    environment:
+      PORT: 4004
+      DB_HOST: mysql
+      DB_USER: root
+      DB_PASSWORD: rootpassword
+      DB_NAME: socmed_app
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  media-service:
+    build: ./services/media-service
+    container_name: socmed-media
+    restart: unless-stopped
+    environment:
+      PORT: 4005
+      UPLOAD_DIR: /uploads
+    volumes:
+      - ./uploads:/uploads
+
+  frontend:
+    build: ./frontend
+    container_name: socmed-frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: http://localhost:4000/api
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app          # kode lokal -> /app di container
+      - /app/node_modules        # biar node_modules di dalam container, tidak tertimpa
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
+
+
+volumes:
+  mysql_data:
